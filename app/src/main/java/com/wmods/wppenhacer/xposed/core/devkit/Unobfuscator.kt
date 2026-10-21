@@ -22,8 +22,7 @@ import com.wmods.wppenhacer.xposed.core.WppCore
 import com.wmods.wppenhacer.xposed.core.components.FMessageWpp
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.wmods.wppenhacer.xposed.utils.YukiLog
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.query.matchers.base.OpCodesMatcher
@@ -210,8 +209,6 @@ object Unobfuscator {
         }
     }
 
-    @Throws(Exception::class)
-    @JvmStatic
     fun loadGhostModeMethod(classLoader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
             val method = findFirstMethodUsingStrings(
@@ -220,7 +217,7 @@ object Unobfuscator {
                 "HandleMeComposing/sendComposing"
             )
                 ?: throw Exception("GhostMode method not found")
-            if (method.parameterTypes.size > 2 && method.parameterTypes[2] == Int::class.java) {
+            if (method.parameterTypes.contains(Int::class.java)) {
                 return@getMethod method
             }
             throw Exception("GhostMode method not found parameter type")
@@ -235,7 +232,8 @@ object Unobfuscator {
                 classLoader,
                 StringMatchType.Contains,
                 "SharedMessageProcessor/handlePlaintext"
-            ) ?: throw NoSuchMethodException("SharedMessageProcessor/handlePlaintext method not found")
+            )
+                ?: throw NoSuchMethodException("SharedMessageProcessor/handlePlaintext method not found")
         }
     }
 
@@ -464,7 +462,7 @@ object Unobfuscator {
     @JvmStatic
     fun loadTabFragmentMethod(classLoader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
-            val clsFrag = XposedHelpers.findClass(
+            val clsFrag = ReflectionUtils.findClass(
                 "com.whatsapp.conversationslist.ConversationsFragment",
                 classLoader
             )
@@ -775,6 +773,24 @@ object Unobfuscator {
         }
     }
 
+    fun loadPropsResolveMethod(loader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(loader) {
+            val propsClass = loadPropsBooleanMethod(loader).declaringClass
+            val candidates = propsClass.declaredMethods.filter {
+                val types = it.parameterTypes
+                Modifier.isStatic(it.modifiers)
+                        && it.returnType == Any::class.java
+                        && types.size >= 4
+                        && types[1] == propsClass
+                        && types[types.size - 2] == Int::class.javaPrimitiveType
+                        && types[types.size - 1] == Boolean::class.javaPrimitiveType
+            }
+            candidates.singleOrNull()
+                ?: candidates.singleOrNull { it.parameterTypes[2] == Int::class.javaObjectType }
+                ?: throw Exception("Props resolve method not found (${candidates.size} candidates)")
+        }
+    }
+
     @Throws(Exception::class)
     @JvmStatic
     fun loadHomeConversationFragmentMethod(loader: ClassLoader): Method {
@@ -891,7 +907,7 @@ object Unobfuscator {
     @JvmStatic
     fun loadUnknownStatusPlaybackMethod(loader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
-            val statusPlaybackClass = XposedHelpers.findClass(
+            val statusPlaybackClass = ReflectionUtils.findClass(
                 "com.whatsapp.status.playback.fragment.StatusPlaybackContactFragment",
                 loader
             )
@@ -950,7 +966,7 @@ object Unobfuscator {
             val result =
                 findFirstClassUsingStrings(loader, StringMatchType.Contains, "WaJobManager/start")
                     ?: throw Exception("BlueOnReplayWaJobManager method not found")
-            val job = XposedHelpers.findClass("org.whispersystems.jobqueue.Job", loader)
+            val job = ReflectionUtils.findClass("org.whispersystems.jobqueue.Job", loader)
             Arrays.stream(result.methods)
                 .filter { m -> m.parameterCount == 1 && m.parameterTypes[0] === job }
                 .findFirst()
@@ -1059,16 +1075,20 @@ object Unobfuscator {
     @JvmStatic
     fun loadStatusUserMethod(loader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
-            val id = UnobfuscatorCache.getInstance().getOfuscateIDString("lastseensun%s")
+            val id = UnobfuscatorCache.getInstance().getOfuscateIDString("last seen %s")
             if (id < 1) throw Exception("GetStatusUser ID not found")
             val result = bridge.findMethod {
                 matcher {
                     addUsingNumber(id)
                     returnType(String::class.java)
                 }
-            }
-            if (result.isEmpty()) throw Exception("GetStatusUser method not found")
-            result[result.size - 1].getMethodInstance(loader)
+            }.firstOrNull() ?: bridge.findMethod {
+                matcher {
+                    addUsingNumber(id)
+                }
+            }.firstOrNull()?.callers?.firstOrNull { it.paramCount == 3 }
+            ?: throw Exception("GetStatusUser method not found")
+            result.getMethodInstance(loader)
         }
     }
 
@@ -1428,7 +1448,7 @@ object Unobfuscator {
     @JvmStatic
     fun loadGetViewConversationMethod(loader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
-            val clazz = XposedHelpers.findClass(
+            val clazz = ReflectionUtils.findClass(
                 "com.whatsapp.conversationslist.ConversationsFragment",
                 loader
             )
@@ -1443,7 +1463,7 @@ object Unobfuscator {
     @JvmStatic
     fun loadOnMenuItemSelected(loader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
-            val aClass = XposedHelpers.findClass("androidx.viewpager.widget.ViewPager", loader)
+            val aClass = ReflectionUtils.findClass("androidx.viewpager.widget.ViewPager", loader)
             val result = Arrays.stream(aClass.declaredMethods).filter { m ->
                 m.parameterCount == 4 &&
                         m.parameterTypes[0] == Int::class.javaPrimitiveType &&
@@ -1465,7 +1485,7 @@ object Unobfuscator {
                     addUsingString("UpdatesViewModel/")
                 }
             }.firstOrNull()
-            val methodSeduleche = XposedHelpers.findMethodBestMatch(
+            val methodSeduleche = ReflectionUtils.findMethodBestMatch(
                 Timer::class.java,
                 "schedule",
                 TimerTask::class.java,
@@ -1550,8 +1570,8 @@ object Unobfuscator {
         return UnobfuscatorCache.getInstance().getClass(loader) {
             val clazzList = bridge.findClass {
                 matcher {
+                    addUsingString("selectItem/position ")
                     addMethod {
-                        addUsingString("CONTACTS_FILTER")
                         paramCount(1)
                         addParamType(Int::class.java)
                     }
@@ -1619,7 +1639,7 @@ object Unobfuscator {
     @JvmStatic
     fun loadMaterialAlertDialog(loader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
-            val callConfirmationFragment = XposedHelpers.findClass(
+            val callConfirmationFragment = ReflectionUtils.findClass(
                 "com.whatsapp.calling.fragment.CallConfirmationFragment",
                 loader
             )
@@ -1681,7 +1701,7 @@ object Unobfuscator {
                 val invokeMethod = invoke.getMethodInstance(loader)
                 if (invokeMethod.parameterCount != 2 || invokeMethod.returnType != Boolean::class.javaPrimitiveType) continue
                 if (invokeMethod.parameterTypes[1].name.contains("jid.UserJid")) {
-                    XposedBridge.log("FIND: $invokeMethod")
+                    YukiLog.log("FIND: $invokeMethod")
                     return@getMethod invokeMethod
                 }
             }
@@ -2731,15 +2751,6 @@ object Unobfuscator {
         }
     }
 
-    fun loadVideoTranscoderStartMethod(classLoader: ClassLoader): Method {
-        return UnobfuscatorCache.getInstance().getMethod(classLoader) {
-            findFirstMethodUsingStrings(
-                classLoader,
-                StringMatchType.Contains,
-                "VideoTranscoder/transcodeVideoNew/"
-            )!!
-        }
-    }
 
 
     fun loadMediaTranscoderStart(classLoader: ClassLoader): Method {
@@ -3239,7 +3250,8 @@ object Unobfuscator {
                     paramCount(1, 5)
                 }
             }.filter { !it.paramTypeNames.isEmpty() && it.paramTypeNames[0].contains("Message") }
-                .map { it.getMethodInstance(classLoader) }.toTypedArray().ifEmpty { throw Exception("onDispatchMessage method not found") }
+                .map { it.getMethodInstance(classLoader) }.toTypedArray()
+                .ifEmpty { throw Exception("onDispatchMessage method not found") }
         }
 
     }
@@ -3324,47 +3336,37 @@ object Unobfuscator {
         }
     }
 
-    fun loadDrawSpanMethods(classLoader: ClassLoader): Array<Method> {
+    private fun findSpanMethods(classLoader: ClassLoader, name: String, paramCount: Int): Array<Method> {
+        val visited = linkedSetOf<String>()
+        val methods = linkedSetOf<Method>()
+        var frontier = listOf("android.text.style.ImageSpan", "android.text.style.ReplacementSpan")
+        while (frontier.isNotEmpty()) {
+            val next = mutableListOf<String>()
+            for (parent in frontier) {
+                bridge.findClass {
+                    matcher { superClass(parent) }
+                }.forEach { clazz ->
+                    if (!visited.add(clazz.name)) return@forEach
+                    next.add(clazz.name)
+                    clazz.methods
+                        .filter { it.isMethod && it.methodName == name && it.paramTypes.size == paramCount }
+                        .forEach { methods.add(it.getMethodInstance(classLoader)) }
+                }
+            }
+            frontier = next
+        }
+        return methods.toTypedArray()
+    }
+
+    fun loadEmojiSpanDrawMethods(classLoader: ClassLoader): Array<Method> {
         return UnobfuscatorCache.getInstance().getMethods(classLoader) {
-            bridge.findClass {
-                matcher {
-                    anyOf {
-                        match {
-                            superClass = "android.text.style.ImageSpan"
-                        }
-                        match {
-                            superClass = "android.text.style.ReplacementSpan"
-                        }
-                    }
-                }
-            }.findMethod {
-                matcher {
-                    paramCount(9)
-                    name = "draw"
-                }
-            }.map { it.getMethodInstance(classLoader) }.toTypedArray()
+            findSpanMethods(classLoader, "draw", 9)
         }
     }
 
-    fun loadGetSizeSpanMethods(classLoader: ClassLoader): Array<Method> {
+    fun loadEmojiSpanGetSizeMethods(classLoader: ClassLoader): Array<Method> {
         return UnobfuscatorCache.getInstance().getMethods(classLoader) {
-            bridge.findClass {
-                matcher {
-                    anyOf {
-                        match {
-                            superClass = "android.text.style.ImageSpan"
-                        }
-                        match {
-                            superClass = "android.text.style.ReplacementSpan"
-                        }
-                    }
-                }
-            }.findMethod {
-                matcher {
-                    paramCount(5)
-                    name = "getSize"
-                }
-            }.map { it.getMethodInstance(classLoader) }.toTypedArray()
+            findSpanMethods(classLoader, "getSize", 5)
         }
     }
 
@@ -3458,67 +3460,6 @@ object Unobfuscator {
                 "ReadReceipts/sendReceiptForIncomingMessage"
             )
                 ?: throw RuntimeException("ReadReceiptMethod method not found")
-        }
-    }
-
-    /**
-     * Class holding the group data attributes synced from the server.
-     * Anchored on the chats DB column name "announcement_group" (the official
-     * name of the "only admins can send messages" mode is announcement group,
-     * see GROUP_ADMINONLY_DESIGN.md), with the model toString fragment
-     * "announcementsOnly=" as fallback anchor.
-     */
-    @Throws(Exception::class)
-    @JvmStatic
-    fun loadGroupAnnouncementClass(loader: ClassLoader): Class<*> {
-        return UnobfuscatorCache.getInstance().getClass(loader) {
-            for (s in listOf("announcement_group", "announcementsOnly=")) {
-                val clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, s)
-                if (clazz != null) return@getClass clazz
-            }
-            throw RuntimeException("GroupAnnouncement class not found")
-        }
-    }
-
-    /**
-     * Boolean field of the group data class that mirrors the
-     * "announcement_group" attribute (true = only admins can send messages).
-     * The attribute name is obfuscated per WhatsApp version, so the field is
-     * resolved as the single non-static boolean field of the class; if the
-     * class declares more than one boolean field the loader refuses to guess
-     * and throws, disabling the caller feature (same failure mode as other
-     * loaders in this file).
-     */
-    @Throws(Exception::class)
-    @JvmStatic
-    fun loadGroupAnnouncementField(loader: ClassLoader): Field {
-        return UnobfuscatorCache.getInstance().getField(loader) {
-            val clazz = loadGroupAnnouncementClass(loader)
-            val booleans = clazz.declaredFields.filter { field ->
-                field.type == Boolean::class.javaPrimitiveType &&
-                        !Modifier.isStatic(field.modifiers)
-            }
-            if (booleans.size != 1) {
-                throw RuntimeException(
-                    "GroupAnnouncement field ambiguous: ${booleans.size} boolean fields in ${clazz.name}"
-                )
-            }
-            booleans[0].apply { isAccessible = true }
-        }
-    }
-
-    /**
-     * Jid field of the group data class, used to index captured group data
-     * instances by their group Jid raw string.
-     */
-    @Throws(Exception::class)
-    @JvmStatic
-    fun loadGroupAnnouncementJidField(loader: ClassLoader): Field {
-        return UnobfuscatorCache.getInstance().getField(loader) {
-            val clazz = loadGroupAnnouncementClass(loader)
-            val jidClass = findFirstClassUsingName(loader, StringMatchType.EndsWith, "jid.Jid")
-            ReflectionUtils.getFieldByExtendType(clazz, jidClass)
-                ?: throw RuntimeException("GroupAnnouncement jid field not found")
         }
     }
 }

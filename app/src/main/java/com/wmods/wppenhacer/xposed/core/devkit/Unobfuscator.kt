@@ -3462,4 +3462,65 @@ object Unobfuscator {
                 ?: throw RuntimeException("ReadReceiptMethod method not found")
         }
     }
+
+    /**
+     * Class holding the group data attributes synced from the server.
+     * Anchored on the chats DB column name "announcement_group" (the official
+     * name of the "only admins can send messages" mode is announcement group,
+     * see GROUP_ADMINONLY_DESIGN.md), with the model toString fragment
+     * "announcementsOnly=" as fallback anchor.
+     */
+    @Throws(Exception::class)
+    @JvmStatic
+    fun loadGroupAnnouncementClass(loader: ClassLoader): Class<*> {
+        return UnobfuscatorCache.getInstance().getClass(loader) {
+            for (s in listOf("announcement_group", "announcementsOnly=")) {
+                val clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, s)
+                if (clazz != null) return@getClass clazz
+            }
+            throw RuntimeException("GroupAnnouncement class not found")
+        }
+    }
+
+    /**
+     * Boolean field of the group data class that mirrors the
+     * "announcement_group" attribute (true = only admins can send messages).
+     * The attribute name is obfuscated per WhatsApp version, so the field is
+     * resolved as the single non-static boolean field of the class; if the
+     * class declares more than one boolean field the loader refuses to guess
+     * and throws, disabling the caller feature (same failure mode as other
+     * loaders in this file).
+     */
+    @Throws(Exception::class)
+    @JvmStatic
+    fun loadGroupAnnouncementField(loader: ClassLoader): Field {
+        return UnobfuscatorCache.getInstance().getField(loader) {
+            val clazz = loadGroupAnnouncementClass(loader)
+            val booleans = clazz.declaredFields.filter { field ->
+                field.type == Boolean::class.javaPrimitiveType &&
+                        !Modifier.isStatic(field.modifiers)
+            }
+            if (booleans.size != 1) {
+                throw RuntimeException(
+                    "GroupAnnouncement field ambiguous: ${booleans.size} boolean fields in ${clazz.name}"
+                )
+            }
+            booleans[0].apply { isAccessible = true }
+        }
+    }
+
+    /**
+     * Jid field of the group data class, used to index captured group data
+     * instances by their group Jid raw string.
+     */
+    @Throws(Exception::class)
+    @JvmStatic
+    fun loadGroupAnnouncementJidField(loader: ClassLoader): Field {
+        return UnobfuscatorCache.getInstance().getField(loader) {
+            val clazz = loadGroupAnnouncementClass(loader)
+            val jidClass = findFirstClassUsingName(loader, StringMatchType.EndsWith, "jid.Jid")
+            ReflectionUtils.getFieldByExtendType(clazz, jidClass)
+                ?: throw RuntimeException("GroupAnnouncement jid field not found")
+        }
+    }
 }

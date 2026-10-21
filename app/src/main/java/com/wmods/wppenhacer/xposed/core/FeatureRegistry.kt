@@ -38,6 +38,7 @@ import com.wmods.wppenhacer.xposed.features.media.DownloadViewOnce
 import com.wmods.wppenhacer.xposed.features.media.MediaPreview
 import com.wmods.wppenhacer.xposed.features.media.MediaQuality
 import com.wmods.wppenhacer.xposed.features.media.StatusDownload
+import com.wmods.wppenhacer.xposed.features.media.StoryHistory
 import com.wmods.wppenhacer.xposed.features.others.ActivityController
 import com.wmods.wppenhacer.xposed.features.others.AudioTranscript
 import com.wmods.wppenhacer.xposed.features.others.BackupRestore
@@ -48,6 +49,7 @@ import com.wmods.wppenhacer.xposed.features.others.CopyStatus
 import com.wmods.wppenhacer.xposed.features.others.DebugFeature
 import com.wmods.wppenhacer.xposed.features.others.GoogleTranslate
 import com.wmods.wppenhacer.xposed.features.others.GroupAdmin
+import com.wmods.wppenhacer.xposed.features.others.GroupAdminOnly
 import com.wmods.wppenhacer.xposed.features.others.JumpFirstMessage
 import com.wmods.wppenhacer.xposed.features.others.MenuHome
 import com.wmods.wppenhacer.xposed.features.others.MinorFixes
@@ -106,6 +108,7 @@ internal object FeatureRegistry {
         CustomTime::class.java,
         ShareLimit::class.java,
         StatusDownload::class.java,
+        StoryHistory::class.java,
         ViewOnce::class.java,
         CallType::class.java,
         MediaPreview::class.java,
@@ -119,6 +122,7 @@ internal object FeatureRegistry {
         DownloadProfile::class.java,
         ChatFilters::class.java,
         GroupAdmin::class.java,
+        GroupAdminOnly::class.java,
         Stickers::class.java,
         CopyStatus::class.java,
         CopySelectionMessage::class.java,

@@ -29,6 +29,11 @@
             app:title="@string/statusdowload" />
 
         <rikka.material.preference.MaterialSwitchPreference
+            app:key="storyhistory"
+            app:summary="@string/story_history_sum"
+            app:title="@string/story_history" />
+
+        <rikka.material.preference.MaterialSwitchPreference
             app:key="downloadviewonce"
             app:summary="@string/downloadviewonce_sum"
             app:title="@string/downloadviewonce" />

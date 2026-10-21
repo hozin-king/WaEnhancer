@@ -749,6 +749,10 @@ object FeatureCatalog {
             category, fragment, null, "download", "status", "share"
         )
         add(
+            catalog, context, "storyhistory", R.string.story_history, R.string.story_history_sum,
+            category, fragment, null, "story", "history", "status", "48", "hours"
+        )
+        add(
             catalog,
             context,
             "downloadviewonce",
@@ -979,6 +983,14 @@ object FeatureCatalog {
         add(
             catalog, context, "admin_grp", R.string.show_admin_group_icon,
             R.string.show_admin_group_icon_sum, category, fragment, null, "admin", "group", "icon"
+        )
+        add(
+            catalog, context, "label_adminonly", R.string.show_admin_only_label,
+            R.string.show_admin_only_label_sum, category, fragment, null, "admin", "only", "label", "group", "announcement"
+        )
+        add(
+            catalog, context, "show_adminonly_toggle", R.string.show_admin_only_shortcut,
+            R.string.show_admin_only_shortcut_sum, category, fragment, null, "admin", "only", "shortcut", "group", "announcement"
         )
         add(
             catalog,

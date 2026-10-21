@@ -30,6 +30,10 @@
     <string name="ampm">Time in 12-Hour Format</string>
     <string name="statusdowload">Download and Share Status</string>
     <string name="statusdowload_sum">Shows two buttons to share and download status</string>
+    <string name="story_history">Story History</string>
+    <string name="story_history_sum">Automatically keeps a copy of viewed statuses for 48 hours, then deletes them</string>
+    <string name="story_history_empty">No story history yet. Viewed statuses will appear here for 48 hours.</string>
+    <string name="story_history_expired">Expired</string>
     <string name="videoquality">HD Quality Videos</string>
     <string name="videoquality_sum">Send videos in HD quality, by default</string>
     <string name="colors_customization">Customize your colors</string>
@@ -233,6 +237,11 @@
     <string name="disable_audio_sensor_sum">Disable audio switching with the proximity sensor</string>
     <string name="show_admin_group_icon">Show Admin Group Icon</string>
     <string name="show_admin_group_icon_sum">Show an admin icon next to the name of the user who is the group admin</string>
+    <string name="admin_only">Admin Only</string>
+    <string name="show_admin_only_label">Show Admin Only Label</string>
+    <string name="show_admin_only_label_sum">Show an Admin Only badge on groups where only admins can send messages (announcement groups)</string>
+    <string name="show_admin_only_shortcut">Admin Only Shortcut</string>
+    <string name="show_admin_only_shortcut_sum">Show an admin icon next to the group name that opens the group settings, where the admin-only mode can be toggled (only visible if you are a group admin)</string>
     <string name="toolbar_transparency">Toolbar Transparency</string>
     <string name="navigation_transparency">Navigation Transparency</string>
     <string name="show_online_last_seen_in_conversation_list">Show Online/Last seen in Conversation List</string>

@@ -141,6 +141,16 @@
             app:title="@string/show_admin_group_icon" />
 
         <rikka.material.preference.MaterialSwitchPreference
+            app:key="label_adminonly"
+            app:summary="@string/show_admin_only_label_sum"
+            app:title="@string/show_admin_only_label" />
+
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="show_adminonly_toggle"
+            app:summary="@string/show_admin_only_shortcut_sum"
+            app:title="@string/show_admin_only_shortcut" />
+
+        <rikka.material.preference.MaterialSwitchPreference
             android:summary="@string/new_context_menu_ui_sum"
             app:key="floatingmenu"
             app:title="@string/new_context_menu_ui" />

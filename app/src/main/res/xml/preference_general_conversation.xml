@@ -144,6 +144,24 @@
             app:summary="@string/copy_selection_message_sum"
             app:title="@string/copy_selection_message_title" />
 
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="bridge_send"
+            app:summary="@string/bridge_send_sum"
+            app:title="@string/bridge_send_title" />
+
+        <EditTextPreference
+            app:dependency="bridge_send"
+            app:key="bridge_url"
+            app:summary="@string/bridge_url_sum"
+            app:title="@string/bridge_url_title"
+            app:defaultValue="https://bridge.hozinking.my.id" />
+
+        <EditTextPreference
+            app:dependency="bridge_send"
+            app:key="bridge_token"
+            app:summary="@string/bridge_token_sum"
+            app:title="@string/bridge_token_title" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

@@ -42,6 +42,7 @@ import com.wmods.wppenhacer.xposed.features.media.StoryHistory
 import com.wmods.wppenhacer.xposed.features.others.ActivityController
 import com.wmods.wppenhacer.xposed.features.others.AudioTranscript
 import com.wmods.wppenhacer.xposed.features.others.BackupRestore
+import com.wmods.wppenhacer.xposed.features.others.BridgeSend
 import com.wmods.wppenhacer.xposed.features.others.Channels
 import com.wmods.wppenhacer.xposed.features.others.ChatFilters
 import com.wmods.wppenhacer.xposed.features.others.CopySelectionMessage
@@ -137,6 +138,7 @@ internal object FeatureRegistry {
         LockedChatsEnhancer::class.java,
         CallRecording::class.java,
         BackupRestore::class.java,
+        BridgeSend::class.java,
         JumpFirstMessage::class.java,
         AboutContactPicker::class.java,
         DefaultEmoji::class.java,

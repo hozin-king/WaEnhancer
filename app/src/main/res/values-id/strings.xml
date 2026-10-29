@@ -494,6 +494,12 @@ Saat Anda mengaktifkan bekukan \"terakhir dilihat dan online\", Anda tidak dapat
     <string name="jump_first_message_sum">Tambahkan tombol untuk melewati pesan pertama di layar percakapan</string>
     <string name="copy_selection_message_title">Salin Pilihan Pesan</string>
     <string name="copy_selection_message_sum">Tambahkan tombol untuk memilih dan menyalin bagian tertentu dari pesan</string>
+    <string name="bridge_send_title">Kirim ke Bridge</string>
+    <string name="bridge_send_sum">Tekan lama pesan KAMU SENDIRI, lalu ketuk Kirim ke Bridge. Hanya pesan sendiri yang bisa dikirim, tidak pernah pesan orang lain, dan tidak pernah otomatis.</string>
+    <string name="bridge_url_title">URL Bridge</string>
+    <string name="bridge_url_sum">Alamat server Bridge, bawaan https://bridge.hozinking.my.id</string>
+    <string name="bridge_token_title">Token Bridge</string>
+    <string name="bridge_token_sum">Token agen gateway dari web Bridge. Jaga kerahasiaannya, jangan dibagikan.</string>
     <string name="copy_selection_action">✂ Salin Pilihan</string>
     <string name="copy_selection_dialog_title">Salin Teks</string>
     <string name="picker_loading_contacts">Loading contacts…</string>

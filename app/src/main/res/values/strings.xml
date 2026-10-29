@@ -516,6 +516,12 @@
     <string name="jump_first_message_sum">Add a button to skip the first message in the conversations screen</string>
     <string name="copy_selection_message_title">Copy Message Selection</string>
     <string name="copy_selection_message_sum">Add a button to select and copy a specific part of a message</string>
+    <string name="bridge_send_title">Send to Bridge</string>
+    <string name="bridge_send_sum">Long-press YOUR OWN message, then tap Send to Bridge. Only your own messages can be sent, never other people\'s, and never automatically.</string>
+    <string name="bridge_url_title">Bridge URL</string>
+    <string name="bridge_url_sum">Bridge server address, default https://bridge.hozinking.my.id</string>
+    <string name="bridge_token_title">Bridge Token</string>
+    <string name="bridge_token_sum">Gateway agent token from Bridge web. Keep it secret, never share it.</string>
     <string name="copy_selection_action">✂ Copy Selection</string>
     <string name="copy_selection_dialog_title">Copy Text</string>
     <string name="picker_loading_contacts">Loading contacts…</string>

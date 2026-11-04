@@ -40,8 +40,8 @@ android {
         minSdk = 28
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 161
-        versionName = "1.6.1 ($gitHash)"
+        versionCode = 162
+        versionName = "1.6.2 ($gitHash)"
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -107,8 +107,7 @@ android {
 
         release {
             isMinifyEnabled = true
-            //noinspection NotShrinkingResources
-            isShrinkResources = false
+            isShrinkResources = true
             signingConfig =
                 if (signingConfigs["config"].storeFile != null) signingConfigs["config"] else signingConfigs["debug"]
             proguardFiles(
@@ -135,6 +134,10 @@ android {
     }
 
     androidResources.additionalParameters += listOf("--allow-reserved-package-id", "--package-id", "0x64")
+    // Ship only the languages the app is translated to; libraries bring ~90 others
+    androidResources.localeFilters += listOf(
+        "en", "ar", "de", "es", "fr", "id", "in", "it", "iw", "pt", "ru", "tr", "zh"
+    )
 
 }
 
@@ -169,7 +172,7 @@ kotlin {
 dependencies {
     testImplementation("junit:junit:4.13.2")
     implementation(libs.colorpicker)
-    implementation(files("libs/dexkit-android.aar"))
+    implementation(libs.dexkit)
     implementation(libs.flatbuffers)
     compileOnly(libs.libxposed.api)
     implementation(platform(libs.yukihook.bom))

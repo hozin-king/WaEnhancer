@@ -23,11 +23,14 @@ import com.wmods.wppenhacer.xposed.core.components.FMessageWpp
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import com.wmods.wppenhacer.xposed.utils.YukiLog
-import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.query.FindClass
+import org.luckypray.dexkit.query.FindMethod
 import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.query.matchers.base.OpCodesMatcher
 import org.luckypray.dexkit.result.ClassData
+import org.luckypray.dexkit.result.ClassDataList
 import org.luckypray.dexkit.result.MethodData
+import org.luckypray.dexkit.result.MethodDataList
 import org.luckypray.dexkit.util.DexSignUtil
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -44,7 +47,8 @@ import java.util.stream.Collectors
 
 object Unobfuscator {
 
-    private lateinit var bridge: DexKitBridge
+    private var dexKitManager: DexKitManager? = null
+    private val bridge = BridgeRouter()
 
     val cacheClasses = ConcurrentHashMap<String, Class<*>>()
 
@@ -55,11 +59,24 @@ object Unobfuscator {
     @JvmStatic
     fun initWithPath(path: String): Boolean {
         return try {
-            bridge = DexKitBridge.create(path)
+            dexKitManager?.close()
+            dexKitManager = DexKitManager(path)
             true
         } catch (_: Exception) {
             false
         }
+    }
+
+    @JvmStatic
+    @Throws(Exception::class)
+    fun <T> withDexKitBridge(callable: DexKitManager.BridgeCallable<T>): T {
+        val manager = dexKitManager ?: throw IllegalStateException("DexKit manager not initialized")
+        return manager.withBridge(callable)
+    }
+
+    @JvmStatic
+    fun releaseDexKitResources() {
+        dexKitManager?.releaseStartupBridge()
     }
 
     @Throws(Exception::class)
@@ -842,6 +859,27 @@ object Unobfuscator {
 
     @Throws(Exception::class)
     @JvmStatic
+    fun loadNoneIncomingAckClass(loader: ClassLoader, ackType: Class<*>): Class<*> {
+        return UnobfuscatorCache.getInstance().getClass(loader) {
+            bridge.findClass {
+                matcher {
+                    addInterface(ackType.name)
+                    methods {
+                        add {
+                            name = "toString"
+                            usingStrings("None")
+                        }
+                    }
+                }
+            }.firstOrNull { data ->
+                val clazz = data.getInstance(loader)
+                clazz.declaredFields.any { it.type == clazz && Modifier.isStatic(it.modifiers) }
+            }?.getInstance(loader) ?: throw Exception("NoneIncomingAck class not found")
+        }
+    }
+
+    @Throws(Exception::class)
+    @JvmStatic
     fun loadAntiRevokeMessageMethod(loader: ClassLoader): Method? {
         return UnobfuscatorCache.getInstance().getMethod(loader) {
             for (s in listOf("msgstore/edit/revoke", "msgstore/revoking/")) {
@@ -1453,7 +1491,7 @@ object Unobfuscator {
                 loader
             )
             Arrays.stream(clazz.declaredMethods).filter { m ->
-                m.parameterCount == 3 && m.returnType == View::class.java && m.parameterTypes[1] == LayoutInflater::class.java
+                m.parameterCount == 3 && m.returnType == View::class.java && LayoutInflater::class.java in m.parameterTypes
             }.findFirst().orElse(null)
                 ?: throw RuntimeException("GetViewConversation method not found")
         }
@@ -1561,6 +1599,26 @@ object Unobfuscator {
                 "hasNewsletterSubscriptions"
             )
                 ?: throw RuntimeException("RemoveChannelRec class not found")
+        }
+    }
+
+    fun loadUpdatesFragmentOnStartMethod(loader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(loader) {
+            findFirstMethodUsingStrings(
+                loader,
+                StringMatchType.Equals,
+                "UpdatesFragment/onStart"
+            ) ?: throw NoSuchMethodException("UpdatesFragment onStart not found")
+        }
+    }
+
+    fun loadUpdatesFragmentAsyncInitMethod(loader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(loader) {
+            findFirstMethodUsingStrings(
+                loader,
+                StringMatchType.Equals,
+                "UpdatesFragment/onFragmentAsyncInit"
+            ) ?: throw NoSuchMethodException("UpdatesFragment async init not found")
         }
     }
 
@@ -1996,7 +2054,12 @@ object Unobfuscator {
     @JvmStatic
     fun loadHeaderChannelItemClass(classLoader: ClassLoader): Class<*> {
         return UnobfuscatorCache.getInstance().getClass(classLoader) {
-            findFirstClassUsingStrings(classLoader, StringMatchType.Contains, "statusTilesEnabled")
+            findFirstClassUsingStrings(
+                classLoader,
+                StringMatchType.Contains,
+                "NewsletterHeaderDataItem(enableExploreButton="
+            )
+                ?: findFirstClassUsingStrings(classLoader, StringMatchType.Contains, "statusTilesEnabled")
                 ?: throw RuntimeException("HeaderChannelItem class not found")
         }
     }
@@ -2613,9 +2676,8 @@ object Unobfuscator {
                 }
             }.firstOrNull() ?: throw Exception("ConversationsFragment A00 method not found")
 
-            val dimenId = methodData.usingNumbers.map { n ->
-                java.lang.Float.floatToIntBits(n.toFloat())
-            }.firstOrNull { idInt ->
+            val dimenId = methodData.usingNumbers.filter { it.bitWidth == 32 }.map { it.intValue() }
+                .firstOrNull { idInt ->
                 (idInt ushr 24) == 0x7F && ((idInt ushr 16) and 0xFF) == 0x07
             } ?: throw Exception("Filter dimen ID not found in ConversationsFragment")
             dimenId
@@ -2697,6 +2759,35 @@ object Unobfuscator {
     @JvmStatic
     fun loadLockedChatsMethod(classLoader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
+            // The locked chats screen reads its list from a no-arg ArrayList getter on the chats
+            // manager. R8 merges the fragment's A2l into its superclass, so scan both.
+            val lockedFragment = bridge.getClassData(
+                "com.whatsapp.conversation.conversationslist.LockedConversationsFragment"
+            )
+            if (lockedFragment != null) {
+                val candidates = listOfNotNull(lockedFragment, lockedFragment.superClass)
+                    .flatMap { it.methods }
+                    .filter { it.paramCount == 0 && it.returnType?.name == List::class.java.name }
+                    .flatMap { it.invokes }
+                    .filter {
+                        it.isMethod && !Modifier.isStatic(it.modifiers) && it.paramCount == 0 &&
+                                it.returnType?.name == ArrayList::class.java.name
+                    }
+                    .distinctBy { it.descriptor }
+                val notificationInvokes = bridge.getMethodData(loadNotificationMethod(classLoader))
+                    ?.invokes?.map { it.descriptor }?.toSet().orEmpty()
+                val reachable = candidates.filter { it.descriptor in notificationInvokes }
+                // The locked getter filters the chat list through a (Jid) -> boolean check
+                val locked = reachable.firstOrNull { candidate ->
+                    candidate.invokes.any {
+                        it.isMethod && it.paramCount == 1 && it.returnType?.name == "boolean"
+                    }
+                }
+                if (locked != null) {
+                    return@getMethod locked.getMethodInstance(classLoader)
+                }
+            }
+
             val classData = bridge.findClass {
                 matcher {
                     addUsingString("conversationsmgr/replacecontact")
@@ -2857,30 +2948,56 @@ object Unobfuscator {
                 }
             }
             if (classesData.isEmpty()) return@getClasses null
-            classesData.stream().map { classData -> convertRealClass(classData, classLoader) }
-                .toArray { length -> arrayOfNulls<Class<*>>(length) }
+            classesData.filter { !Modifier.isAbstract(it.modifiers) }
+                .mapNotNull { classData -> convertRealClass(classData, classLoader) }
+                .toTypedArray()
         }
     }
 
-    @Throws(Exception::class)
-    @JvmStatic
-    fun loadPinnedFilterMethod(classLoader: ClassLoader): Method {
+    fun loadPinnedChatsPremiumUpsellMethod(classLoader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
-            val method = findFirstMethodUsingStrings(
+            bridge.findMethod {
+                matcher {
+                    returnType(Boolean::class.javaPrimitiveType!!)
+                    paramCount(2)
+                    addUsingNumber(3)
+                    modifiers(Modifier.STATIC)
+                }
+            }.filter {
+                val types = it.paramTypeNames
+                types[0] == it.className && types[1] == Set::class.java.name
+            }.singleOrNull()?.getMethodInstance(classLoader)
+                ?: throw NoSuchMethodException("PinnedChatsPremiumUpsell method not found")
+        }
+    }
+
+    fun loadPinChatHandlerMethod(classLoader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(classLoader) {
+            findFirstMethodUsingStrings(
                 classLoader,
                 StringMatchType.Contains,
-                "pinSelectedJids"
-            ) ?: return@getMethod null
-            val methodData = bridge.getMethodData(method)
-            for (invoke in methodData!!.invokes) {
-                if (!invoke.isMethod) continue
-                val methodInstance = invoke.getMethodInstance(classLoader)
-                if (!Set::class.java.isAssignableFrom(methodInstance.returnType)) continue
-                if (methodInstance.parameterCount == 2 && methodInstance.parameterTypes[0] == Iterable::class.java && methodInstance.parameterTypes[1] == Set::class.java) {
-                    return@getMethod methodInstance
-                }
-            }
-            throw NoSuchMethodException("PinnedLinkedHashMethod not found")
+                "PinChatHandler/setArchive"
+            ) ?: throw NoSuchMethodException("PinChatHandler method not found")
+        }
+    }
+
+    fun loadPinSelectedChatsMethod(classLoader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(classLoader) {
+            findFirstMethodUsingStrings(
+                classLoader,
+                StringMatchType.Contains,
+                "ConversationPinHelper/pinSelectedJids max="
+            ) ?: throw NoSuchMethodException("PinSelectedChats method not found")
+        }
+    }
+
+    fun loadTrimExcessPinnedChatsMethod(classLoader: ClassLoader): Method {
+        return UnobfuscatorCache.getInstance().getMethod(classLoader) {
+            findFirstMethodUsingStrings(
+                classLoader,
+                StringMatchType.Contains,
+                "ConversationPinHelper/trimExcessPinnedChats"
+            ) ?: throw NoSuchMethodException("TrimExcessPinnedChats method not found")
         }
     }
 
@@ -3292,9 +3409,11 @@ object Unobfuscator {
                 "TextStatusComposerFragment"
             )
             ReflectionUtils.findMethodUsingFilter(clazz) { method ->
-                method.parameterCount == 2 &&
-                        method.parameterTypes[0] === Bundle::class.java &&
-                        method.parameterTypes[1] === View::class.java
+                method.parameterCount == 2 && (
+                        (method.parameterTypes[0] === View::class.java &&
+                                method.parameterTypes[1] === Bundle::class.java) ||
+                                (method.parameterTypes[0] === Bundle::class.java &&
+                                        method.parameterTypes[1] === View::class.java))
             }
         }
     }
@@ -3325,14 +3444,17 @@ object Unobfuscator {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
             bridge.findMethod {
                 matcher {
-                    paramTypes(
-                        Bitmap::class.java,
-                        ColorFilter::class.java,
-                        Float::class.javaPrimitiveType
-                    )
+                    paramCount(3, 4)
                     returnType(Bitmap::class.java)
+                    usingNumbers(0.70710678118)
                 }
-            }.single().getMethodInstance(classLoader)
+            }.single {
+                val types = it.paramTypeNames
+                types.size in 3..4 &&
+                        types.first() == Bitmap::class.java.name &&
+                        types[1] == ColorFilter::class.java.name &&
+                        types.last() == "float"
+            }.getMethodInstance(classLoader)
         }
     }
 
@@ -3446,7 +3568,18 @@ object Unobfuscator {
                 classLoader,
                 StringMatchType.Contains,
                 "outgoing-launch/cm-null-contact"
-            ) ?: throw NoSuchMethodException("StartOutgoingCall method not found")
+            ) ?: bridge.findMethod {
+                matcher {
+                    paramTypes(
+                        Context::class.java.name,
+                        loadWaContactClass(classLoader).name,
+                        Int::class.java.name,
+                        Boolean::class.java.name
+                    )
+                    addInvoke("Ljava/util/Collections;->singletonList(Ljava/lang/Object;)Ljava/util/List;")
+                }
+            }.firstOrNull()?.getMethodInstance(classLoader)
+            ?: throw NoSuchMethodException("StartOutgoingCall method not found")
         }
     }
 
@@ -3461,6 +3594,37 @@ object Unobfuscator {
             )
                 ?: throw RuntimeException("ReadReceiptMethod method not found")
         }
+    }
+
+    private class BridgeRouter {
+
+        private fun <T> execute(callable: DexKitManager.BridgeCallable<T>): T {
+            return try {
+                withDexKitBridge(callable)
+            } catch (e: RuntimeException) {
+                throw e
+            } catch (e: Exception) {
+                throw RuntimeException(e)
+            }
+        }
+
+        fun findMethod(query: FindMethod.() -> Unit): MethodDataList =
+            execute { it.findMethod(FindMethod.create().apply(query)) }
+
+        fun findClass(query: FindClass.() -> Unit): ClassDataList =
+            execute { it.findClass(FindClass.create().apply(query)) }
+
+        fun getClassData(clazz: Class<*>): ClassData? = execute { it.getClassData(clazz) }
+
+        fun getClassData(className: String): ClassData? = execute { it.getClassData(className) }
+
+        fun getMethodData(method: Method): MethodData? = execute { it.getMethodData(method) }
+
+        fun getMethodData(constructor: Constructor<*>): MethodData? =
+            execute { it.getMethodData(constructor) }
+
+        fun getMethodData(methodDescriptor: String): MethodData? =
+            execute { it.getMethodData(methodDescriptor) }
     }
 
     /**

@@ -1,12 +1,13 @@
-[NEW]
-* Deleted Message Capture: deleted messages are now saved and can be viewed, restored or removed from the new Deleted Messages screen in the home menu (protected by your device lock). Pull down to refresh the list
-* Root diagnostics can now fix Hide My App List blocks for WhatsApp/Business, including whitelist mode, and offer to restart the device
-
 [IMPROVED]
-* The module now uses the YukiHookAPI 1.5 / libxposed API 101 framework
-* Prop overrides now hook WhatsApp's single prop resolver, so they apply more reliably
+* Faster WhatsApp startup: DexKit is now opened only when needed and closed when idle
+* Smoother scrolling and tab switching, with less work done in the theme, custom view and resource hooks
+* IG Status no longer rebuilds the status header and reloads profile photos on every update, removing stutters when opening chats and switching tabs
+* Floating Bottom Bar no longer forces extra layout passes
+* The custom wallpaper now shows on the first Home frame
+* The module connection no longer opens a helper screen when the first attempt succeeds
 
 [FIXED]
-* Fixed Hide Delivered blocking message sending on some conversations
-* Ghost mode now applies as soon as it is toggled
-* Fixed the contact picker not listing saved contacts on newer WhatsApp versions, and added support for @lid contacts in the call blocker lists
+* Fixed Send Blue Tick sending hundreds of messages at once in chats with many hidden receipts;
+* Fixed Send Blue Tick retrying messages that could no longer be found every time a chat was opened
+* Fixed a crash in Locked Chats Enhancer on newer WhatsApp versions
+* Fixed Locked Chats Enhancer showing only locked contacts in the contact list instead of hiding them

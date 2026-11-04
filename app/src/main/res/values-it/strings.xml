@@ -399,10 +399,10 @@
     <string name="transcription_provider_sum">Scegli il servizio AI per la trascrizione audio</string>
     <string name="assemblyai">Abilita AssemblyAI</string>
     <string name="assemblyai_sum">Sostituisce la trascrizione predefinita di WhatsApp con AssemblyAI</string>
-    <string name="assemblyai_key">Chiave AssemblyAI API</string>
+    <string name="assemblyai_key">Chiave API AssemblyAI</string>
     <string name="assemblyai_key_sum">Chiave di accesso API AssemblyAI (Ottienila su assemblyai.com)</string>
     <string name="groq_api_key">Chiave Groq API</string>
-    <string name="groq_api_key_sum">Chiave di accesso API AssemblyAI (Ottienila su console.groq.com)</string>
+    <string name="groq_api_key_sum">Chiave di accesso API Groq (Ottienila su console.groq.com)</string>
     <string name="google_translate">Abilita Google Translate</string>
     <string name="google_translate_sum">Sostituisce il traduttore nativo di WhatsApp con Google Translate</string>
     <string name="show_contact_info">Mostra nelle informazioni del contatto</string>
@@ -517,4 +517,6 @@
     <string name="confirm_delete_message">Eliminare definitivamente questo backup?</string>
     <string name="messages_deleted_success">Messaggi eliminati</string>
     <string name="messages_restored_success">Messaggi ripristinati</string>
+    <string name="hide_delivered_unknown">Nascondi Consegnato per numeri sconosciuti</string>
+    <string name="hide_delivered_unknown_sum">Mostra una sola spunta per i numeri non salvati nei tuoi contatti, come se il messaggio non fosse arrivato</string>
 </resources>

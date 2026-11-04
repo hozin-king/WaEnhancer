@@ -1,12 +1,16 @@
 package com.wmods.wppenhacer.xposed.features.customization
 
+import android.app.Activity
 import android.content.SharedPreferences
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.LinearLayout
 import android.widget.ListView
 import com.highcapable.kavaref.KavaRef.Companion.resolve
-import com.highcapable.yukihookapi.extension.kavaref.hook
 import com.highcapable.yukihookapi.extension.kavaref.hookAll
 import com.wmods.wppenhacer.adapter.IGStatusAdapter
 import com.wmods.wppenhacer.views.IGStatusView
@@ -16,6 +20,9 @@ import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import org.luckypray.dexkit.query.enums.StringMatchType
+import java.lang.ref.WeakReference
+import java.util.Collections
+import java.util.WeakHashMap
 
 private val mListStatusContainer = ArrayList<IGStatusView>()
 
@@ -24,11 +31,27 @@ class IGStatus(loader: ClassLoader, preferences: SharedPreferences) : Feature(lo
     companion object {
         @JvmField
         var itens = ArrayList<Any?>()
+
+        private const val FORCE_LOAD_DELAY_MS = 1500L
+        private const val PAGER_RETRY_MS = 500L
+        private const val PAGER_MAX_ATTEMPTS = 30
+        private const val PAGER_OFFSCREEN_PAGES = 6
+        private const val PAGER_RESTORE_DELAY_MS = 2000L
     }
+
+    private var raisedPager: WeakReference<ViewGroup>? = null
+    private var originalPageLimit = 1
+
+    // UpdatesFragment instances whose async init already ran, naturally or forced
+    private val initializedFragments = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<Any, Boolean>())
+    )
 
     @Throws(Throwable::class)
     override fun doHook() {
         if (!xprefs.getBoolean("igstatus", false)) return
+
+        forceStatusLoad()
 
         val fabintMethod = Unobfuscator.loadFabMethod(classLoader)
 
@@ -92,9 +115,10 @@ class IGStatus(loader: ClassLoader, preferences: SharedPreferences) : Feature(lo
                 newList.add(0, null)
                 itens = newList
                 for (mStatusContainer in mListStatusContainer) {
-                    val mStatusAdapter =
-                        IGStatusAdapter(WppCore.getCurrentActivity()!!, statusInfoClass)
-                    mStatusContainer.adapter = mStatusAdapter
+                    val activity = WppCore.getCurrentActivity()!!
+                    if (mStatusContainer.adapter?.context !== activity) {
+                        mStatusContainer.adapter = IGStatusAdapter(activity, statusInfoClass)
+                    }
                     mStatusContainer.updateList()
                 }
             }
@@ -142,6 +166,99 @@ class IGStatus(loader: ClassLoader, preferences: SharedPreferences) : Feature(lo
                 }
             }
         }
+    }
+
+    private fun forceStatusLoad() {
+        val onStart = runCatching { Unobfuscator.loadUpdatesFragmentOnStartMethod(classLoader) }
+            .onFailure { logDebug(it) }.getOrNull() ?: return
+        val asyncInit =
+            runCatching { Unobfuscator.loadUpdatesFragmentAsyncInitMethod(classLoader) }
+                .onFailure { logDebug(it) }.getOrNull() ?: return
+
+        asyncInit.hook {
+            before { initializedFragments.add(instance) }
+        }
+
+        val handler = Handler(Looper.getMainLooper())
+        keepAllTabsAlive(handler)
+        onStart.hook {
+            after {
+                val fragment = instance
+                logDebug("UpdatesFragment.onStart", fragment)
+                handler.postDelayed({
+                    if (fragment !in initializedFragments) {
+                        runCatching {
+                            initializedFragments.add(fragment)
+                            asyncInit.invoke(fragment)
+                        }.onFailure { logDebug(it) }
+                    }
+                    handler.postDelayed({ restorePageLimit() }, PAGER_RESTORE_DELAY_MS)
+                }, FORCE_LOAD_DELAY_MS)
+            }
+        }
+    }
+
+    private fun keepAllTabsAlive(handler: Handler) {
+        WppCore.homeActivityClass.resolve().method {
+            name = "onCreate"
+            parameters(Bundle::class)
+        }.hookAll {
+            after {
+                val activity = instance<Activity>()
+                var attempts = 0
+                handler.post(object : Runnable {
+                    override fun run() {
+                        val pager = findTabsPager(activity.window.decorView)
+                        val ready = pager != null &&
+                            ReflectionUtils.callMethod(pager, "getAdapter") != null
+                        if (pager == null || !ready) {
+                            if (++attempts < PAGER_MAX_ATTEMPTS && !activity.isFinishing) {
+                                handler.postDelayed(this, PAGER_RETRY_MS)
+                            } else {
+                                logDebug("home pager not found", "$attempts pager=${pager?.javaClass?.name}")
+                            }
+                            return
+                        }
+                        val limit = ReflectionUtils.callMethod(pager, "getOffscreenPageLimit") as? Int ?: 1
+                        logDebug("home pager", "limit=$limit attempts=$attempts")
+                        if (limit < PAGER_OFFSCREEN_PAGES) {
+                            runCatching {
+                                ReflectionUtils.callMethod(pager, "setOffscreenPageLimit", PAGER_OFFSCREEN_PAGES)
+                                raisedPager = WeakReference(pager)
+                                originalPageLimit = limit
+                            }.onFailure { logDebug(it) }
+                        }
+                    }
+                })
+            }
+        }
+    }
+
+    private fun restorePageLimit() {
+        val pager = raisedPager?.get() ?: return
+        raisedPager = null
+        runCatching {
+            ReflectionUtils.callMethod(pager, "setOffscreenPageLimit", originalPageLimit)
+        }.onFailure { logDebug(it) }
+        logDebug("home pager", "restored limit=$originalPageLimit")
+    }
+
+    private fun isViewPager(view: View): Boolean {
+        var cls: Class<*>? = view.javaClass
+        while (cls != null) {
+            if (cls.name == "androidx.viewpager.widget.ViewPager") return true
+            cls = cls.superclass
+        }
+        return false
+    }
+
+    private fun findTabsPager(view: View): ViewGroup? {
+        if (isViewPager(view)) return view as ViewGroup
+        if (view !is ViewGroup) return null
+        for (i in 0 until view.childCount) {
+            findTabsPager(view.getChildAt(i))?.let { return it }
+        }
+        return null
     }
 
     override fun getPluginName(): String {

@@ -38,6 +38,7 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Arrays
+import java.util.Calendar
 import java.util.Collections
 import java.util.Date
 import java.util.Objects
@@ -649,15 +650,27 @@ object Unobfuscator {
     @JvmStatic
     fun loadTimeToSecondsMethod(classLoader: ClassLoader): Method {
         return UnobfuscatorCache.getInstance().getMethod(classLoader) {
-            bridge.findMethod {
+            val candidates = bridge.findMethod {
                 matcher {
-                    usingNumbers(223, 224)
                     modifiers = Modifier.STATIC
                     returnType = "java.lang.String"
                     paramCount = 2
                     paramTypes(null, "java.util.Calendar")
                 }
-            }.single().getMethodInstance(classLoader)
+            }
+            if (candidates.isEmpty()) throw Exception("TimeToSeconds method not found")
+            for (candidate in candidates) {
+                for (invoke in candidate.invokes) {
+                    val invoked = invoke.getMethodInstance(classLoader)
+                    if (invoked.returnType == String::class.java &&
+                        invoked.parameterCount == 3 &&
+                        invoked.parameterTypes[2] == Calendar::class.java
+                    ) {
+                        return@getMethod candidate.getMethodInstance(classLoader)
+                    }
+                }
+            }
+            throw Exception("TimeToSeconds method not found")
         }
     }
 
